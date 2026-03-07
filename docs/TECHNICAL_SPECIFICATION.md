@@ -76,9 +76,9 @@ Out-of-scope (for this revision):
   - ID scheme used: M1..M6 mapped to IDs 1..6.
 
 ## 6.3 Distance/Attitude Sensing
-- Ultrasonic sensors (model TBD).
+- Ultrasonic sensors: HC-SR04P (3.0-5.5 V wide-voltage).
   - Role: Ground/obstacle distance estimation for head-height control.
-- IMU (model TBD).
+- IMU: MPU6050.
   - Role: Arm/head orientation and disturbance compensation.
 
 ## 6.4 Cutting Subsystem
@@ -90,7 +90,12 @@ Out-of-scope (for this revision):
 ## 6.5 Mechanical and Structure
 - Module: Underslung RTU mount.
 - Materials: CNC aluminium + PETG protective guards.
+- Additional structural members: PVC pipes (beam elements for selected non-critical supports).
 - Constraints: Must remain within RTU payload and stability envelope.
+
+## 6.7 CAD and Mechanical Development Tools
+- Primary CAD workflow: Autodesk Fusion 360.
+- Expected outputs: assembly models, mounting references, fabrication drawings, and interference checks.
 
 ## 6.6 Power
 - Upstream supply: RTU 24 V rail (system-level source).
@@ -131,6 +136,16 @@ Out-of-scope (for this revision):
 - `frontend_api`: dataset/task management and runtime control endpoints.
 - `training_orchestrator`: dataset export, training job execution, artifact tracking.
 - `model_registry`: model versioning, promotion, rollback, and deployment metadata.
+
+## 8.5 Application and Data Stack
+- Messaging: HiveMQTT (MQTT broker and pub/sub telemetry/control channels).
+- Frontend: React.js + Tailwind CSS.
+- Backend services: C#.
+- Data persistence: PostgreSQL.
+- Intended use:
+  - Frontend for task setup, dataset labeling workflow, model selection, and runtime monitoring.
+  - Backend for orchestration, API, safety-state supervision, and database operations.
+  - MQTT for low-latency inter-module communication and RTU integration bridging where required.
 
 ## 8.2 AI Model Specification
 - Model family: YOLOv8 (variant TBD: n/s/m based on Pi performance).
@@ -221,13 +236,12 @@ Out-of-scope (for this revision):
 - Motion test script: `STServo_Python/stservo-env/sms_sts/read_write.py`.
 
 ## 13. Pending Inputs (To Be Added)
-- Exact ultrasonic sensor model and mounting geometry.
-- IMU model and calibration method.
+- Ultrasonic and IMU mounting geometry and calibration procedure details.
 - ESC model and cutter electrical ratings.
 - RTU interface message schema (ROS topics/services or custom protocol).
 - Mechanical CAD references and mass/inertia table.
 - Complete BOM with part numbers, vendors, and cost.
-- Frontend tech stack decision and hosting architecture.
+- Frontend/backend deployment architecture (host layout, containerization, CI/CD).
 - Final danger-zone geometry definition and person-safety threshold tuning.
 
 ## 14. Revision Notes
