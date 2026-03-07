@@ -50,14 +50,19 @@ def main() -> int:
     p.add_argument("--source", default="0", help="Video source (index or device/file)")
     p.add_argument("--person-conf", type=float, default=0.5, help="Person confidence threshold")
     p.add_argument("--clear-frames", type=int, default=10, help="Frames without person before resume")
+    p.add_argument("--imgsz", type=int, default=320, help="YOLO inference size (smaller = faster)")
     p.add_argument("--port", default="/dev/ttyAMA0", help="Servo serial port")
     p.add_argument("--baud", type=int, default=1_000_000, help="Servo baudrate")
     p.add_argument("--servo-id", type=int, default=1, help="Servo ID to move")
     p.add_argument("--move-a", type=int, default=512, help="Motion endpoint A")
     p.add_argument("--move-b", type=int, default=3072, help="Motion endpoint B")
     p.add_argument("--move-time", type=int, default=1000, help="Move time in ms")
+    p.add_argument("--stop-time", type=int, default=80, help="Emergency hold move time in ms")
     p.add_argument("--speed", type=int, default=0, help="Servo speed (0 default)")
     p.add_argument("--interval", type=float, default=1.5, help="Seconds between move commands")
+    p.add_argument("--frame-width", type=int, default=640, help="Camera capture width")
+    p.add_argument("--frame-height", type=int, default=480, help="Camera capture height")
+    p.add_argument("--drop-frames", type=int, default=1, help="Drop old buffered frames each loop")
     p.add_argument("--no-display", action="store_true", help="Disable video display window")
     args = p.parse_args()
 
@@ -81,6 +86,9 @@ def main() -> int:
         print(f"Failed to open video source: {args.source}")
         bus.close()
         return 2
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.frame_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.frame_height)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     print("Running. Press 'q' in window or Ctrl+C to stop.")
 
@@ -94,12 +102,21 @@ def main() -> int:
 
     try:
         while True:
+            # Flush stale camera frames so detection is as close to real-time as possible.
+            for _ in range(max(0, args.drop_frames)):
+                cap.grab()
             ok, frame = cap.read()
             if not ok:
                 print("Video frame read failed; exiting.")
                 break
 
-            result = model(frame, verbose=False)[0]
+            result = model(
+                frame,
+                verbose=False,
+                imgsz=args.imgsz,
+                conf=args.person_conf,
+                classes=[0],  # person only for fastest safety check
+            )[0]
             person_near = person_detected(result, args.person_conf)
 
             now = time.time()
@@ -108,7 +125,7 @@ def main() -> int:
                 clear_count = 0
                 if not stopped_for_person:
                     hold = read_position(bus, args.servo_id, current_target)
-                    move_test(bus, args.servo_id, hold, 300, args.speed)
+                    move_test(bus, args.servo_id, hold, args.stop_time, args.speed)
                     current_target = hold
                     stopped_for_person = True
                     print("SAFETY: person detected -> servo HOLD")
