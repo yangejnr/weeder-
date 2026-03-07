@@ -3,10 +3,10 @@
 ## 1. Document Control
 - Document title: Technical Specification
 - Project: AI-driven under-canopy trimming module for Robotriks RTU
-- Version: 0.1 (Baseline)
+- Version: 0.2
 - Date: 2026-03-07
 - Owner: Henry
-- Status: Draft (component list expansion pending)
+- Status: Draft (expanded AI/safety workflow)
 
 ## 2. Purpose and Scope
 This document defines the technical specification for an autonomous, RTU-mounted agri-implement that performs safe, stem-proximal trimming of undergrowth around crops while the base RTU navigates the field.
@@ -27,9 +27,11 @@ Out-of-scope (for this revision):
 ## 3. System Objectives
 - Trim vegetation in the 0-200 mm stem-proximal zone.
 - Distinguish weeds from crop stems using edge AI.
+- Detect humans near the end-effector and force immediate safe shutdown behavior.
 - Dynamically command cutting aggressiveness based on weed confidence.
 - Maintain cutting-head pose relative to terrain with closed-loop control.
 - Integrate safely with Robotriks RTU power, navigation, and mode control.
+- Support task-specific model training from user-labeled farm images via frontend workflow.
 
 ## 4. Top-Level Requirements
 - AI detection target: >90% weed/crop mAP on edge hardware.
@@ -38,6 +40,7 @@ Out-of-scope (for this revision):
 - Field efficacy: >75% weed height reduction.
 - Crop safety: 0 crop damage under defined test protocol.
 - Operating base speed target: up to 0.5 m/s RTU traversal.
+- Human safety target: if `person` detected inside configurable danger zone, cutter command must transition to OFF with safety override (software + E-stop chain).
 
 ## 5. System Architecture
 ## 5.1 Functional Blocks
@@ -47,12 +50,14 @@ Out-of-scope (for this revision):
 - Manipulation: 6-DoF serial bus servo arm.
 - Cutting subsystem: BLDC motor + nylon trimmer head.
 - Supervisory control: mode manager and safety interlocks.
+- Frontend and MLOps: dataset, training-job control, model registry, deployment control.
 
 ## 5.2 Operational Modes
 - IDLE: Arm parked, cutter disabled.
 - MANUAL: Operator-authorized direct control with cutter interlocks.
 - AUTO_TRIM: AI-guided adaptive trimming.
 - FAULT/E_STOP: Immediate cutter shutdown, arm safe-lift/hold.
+- HUMAN_NEAR: Safety override state with cutter disabled and arm raised/held away from crop row.
 
 ## 6. Hardware Specification (Current Known Components)
 ## 6.1 Compute and Vision
@@ -123,10 +128,13 @@ Out-of-scope (for this revision):
 - `actuation`: servo bus command layer + cutter command layer.
 - `safety`: interlocks, watchdogs, E-stop handling.
 - `telemetry`: logging, diagnostics, metrics extraction.
+- `frontend_api`: dataset/task management and runtime control endpoints.
+- `training_orchestrator`: dataset export, training job execution, artifact tracking.
+- `model_registry`: model versioning, promotion, rollback, and deployment metadata.
 
 ## 8.2 AI Model Specification
 - Model family: YOLOv8 (variant TBD: n/s/m based on Pi performance).
-- Classes: minimum `crop_stem`, `weed`.
+- Baseline deployed class set: `crop_stem`, `weed`, `person`.
 - Inference outputs:
   - Class label.
   - Confidence score.
@@ -135,8 +143,25 @@ Out-of-scope (for this revision):
 - Decision policy baseline:
   - If weed confidence >0.7 in active cutting zone: low cutting height (~20 mm), cutter enabled.
   - Else: safe raised height (~60 mm), cutter disabled.
+  - If `person` detected within configured proximity zone: immediate cutter OFF, arm safe raise, and safety state latch.
 
-## 8.3 Control Loop Specification
+## 8.3 Frontend and Training Workflow
+- Web frontend supports task-based dataset definition (e.g., per crop type, field, operation objective).
+- Operators can upload images/video frames and annotate classes to `keep` or `remove` categories mapped to runtime classes.
+- Backend exports YOLO-format datasets and launches training jobs (preferably off-Pi for heavy training).
+- Model registry stores:
+  - model version and checksum,
+  - class map,
+  - validation metrics,
+  - intended task/farm profile,
+  - confidence and safety thresholds.
+- Deployment flow:
+  - Select model version in UI,
+  - deploy to Pi inference runtime,
+  - perform health check,
+  - allow rollback to previous model.
+
+## 8.4 Control Loop Specification
 - Loop frequency target: 50 Hz.
 - Inputs: AI state, ultrasonic/ToF distance, IMU orientation, servo feedback.
 - Outputs: 6-DoF servo position/speed commands and cutter enable/speed setpoint.
@@ -146,10 +171,15 @@ Out-of-scope (for this revision):
 
 ## 9. Safety Specification
 - Emergency-stop chain with cutter power cutoff in tens of milliseconds.
+- AI-based person-proximity safety is advisory to hard safety and cannot replace hardware E-stop.
 - Default-safe behavior on any critical fault:
   - Cutter OFF.
   - Arm to safe lift or hold state.
   - Fault latched until explicit clear.
+- Human-proximity safety behavior:
+  - Trigger condition: person detection confidence above threshold in danger zone near cutting head.
+  - Action: force cutter disable command, inhibit re-enable, command safe arm posture.
+  - Clear condition: configurable sustained absence window + explicit mode/state conditions.
 - Fault classes:
   - Comms timeout (RTU, servo bus, camera pipeline).
   - Over/under-voltage in actuator domains.
@@ -166,6 +196,7 @@ Out-of-scope (for this revision):
 ## 10.2 AI Validation
 - Dataset split and annotation protocol (TBD).
 - mAP, precision, recall per class.
+- Human detection precision/recall and false-negative analysis in near-head zone.
 - Latency profiling from frame capture to actuation command.
 
 ## 10.3 Field Validation
@@ -196,7 +227,9 @@ Out-of-scope (for this revision):
 - RTU interface message schema (ROS topics/services or custom protocol).
 - Mechanical CAD references and mass/inertia table.
 - Complete BOM with part numbers, vendors, and cost.
+- Frontend tech stack decision and hosting architecture.
+- Final danger-zone geometry definition and person-safety threshold tuning.
 
 ## 14. Revision Notes
 - v0.1 created with currently confirmed hardware and control goals.
-- Next revision will integrate full component list and finalized interface definitions.
+- v0.2 adds human-proximity safety requirements and frontend-driven model training/deployment workflow.
