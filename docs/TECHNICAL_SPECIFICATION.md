@@ -66,6 +66,9 @@ Out-of-scope (for this revision):
   - OS: Linux (Raspberry Pi OS / Debian-based).
 - Camera: Raspberry Pi Camera Module 3.
   - Role: RGB image stream for crop/weed detection.
+- Wireless video option: Camera + EWRF 5.8G OTG Receiver.
+  - Receiver connection: USB OTG to Raspberry Pi.
+  - Role: Alternative live video input path for perception/monitoring workflows.
 
 ## 6.2 Actuation Bus
 - Servo adapter: Waveshare Bus Servo Adapter (A).
@@ -116,6 +119,7 @@ Out-of-scope (for this revision):
 
 ## 7.2 Vision Pipeline Interface
 - Camera to Pi over CSI.
+- Alternative camera path over USB (OTG receiver as UVC-like video source, driver dependent).
 - Inference output interface: timestamped detections with class, bbox, confidence.
 
 ## 7.3 RTU Integration Interface
