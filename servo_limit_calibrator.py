@@ -146,6 +146,26 @@ def jog_until_mark(
             print(f"\rStep={step:<4} Pos={pos:<4}", end="", flush=True)
 
 
+def refine_limit_with_manual_confirm(
+    bus: STSSerial,
+    sid: int,
+    start_pos: int,
+    move_time_ms: int,
+    speed: int,
+    label: str,
+) -> int:
+    print(f"\nRefine {label} limit manually (optional), then press 's' to confirm.")
+    return jog_until_mark(
+        bus=bus,
+        sid=sid,
+        start_pos=start_pos,
+        move_time_ms=move_time_ms,
+        speed=speed,
+        mark_key="s",
+        mark_label=label,
+    )
+
+
 def autosweep_until_save(
     bus: STSSerial,
     sid: int,
@@ -287,6 +307,18 @@ def main() -> int:
         default="manual",
         help="manual: you set zero with keys; current: use immediate readback as zero",
     )
+    p.add_argument(
+        "--refine-after-auto",
+        action="store_true",
+        default=True,
+        help="After auto-detect end-stop, allow manual refine and confirm with 's' (default: on)",
+    )
+    p.add_argument(
+        "--no-refine-after-auto",
+        action="store_false",
+        dest="refine_after_auto",
+        help="Disable manual refine after auto-detect",
+    )
     p.add_argument("--return-time", type=int, default=700, help="Return-to-zero time (ms)")
     p.add_argument(
         "--auto-test",
@@ -352,6 +384,15 @@ def main() -> int:
                 args.stall_delta,
                 args.stall_cycles,
             )
+            if args.refine_after_auto:
+                max_left = refine_limit_with_manual_confirm(
+                    bus=bus,
+                    sid=args.servo_id,
+                    start_pos=max_left,
+                    move_time_ms=args.move_time,
+                    speed=args.speed,
+                    label="max_left",
+                )
         else:
             max_left = jog_until_mark(
                 bus=bus,
@@ -383,6 +424,15 @@ def main() -> int:
                 args.stall_delta,
                 args.stall_cycles,
             )
+            if args.refine_after_auto:
+                max_right = refine_limit_with_manual_confirm(
+                    bus=bus,
+                    sid=args.servo_id,
+                    start_pos=max_right,
+                    move_time_ms=args.move_time,
+                    speed=args.speed,
+                    label="max_right",
+                )
         else:
             max_right = jog_until_mark(
                 bus=bus,
