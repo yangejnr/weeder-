@@ -177,12 +177,13 @@ def autosweep_until_save(
     stall_delta: int,
     stall_cycles: int,
 ) -> int:
-    if direction not in ("left", "right"):
-        raise ValueError("direction must be 'left' or 'right'")
+    if direction not in ("inc", "dec"):
+        raise ValueError("direction must be 'inc' or 'dec'")
 
     pos = start_pos
-    delta = -abs(step) if direction == "left" else abs(step)
-    print(f"Auto-sweeping {direction.upper()}... press 's' to save end, 'q' to quit")
+    delta = abs(step) if direction == "inc" else -abs(step)
+    dir_label = "INC" if direction == "inc" else "DEC"
+    print(f"Auto-sweeping {dir_label}... press 's' to save end, 'q' to quit")
     stuck_count = 0
 
     with raw_stdin():
@@ -207,7 +208,7 @@ def autosweep_until_save(
                 stuck_count = 0
 
             if stuck_count >= stall_cycles:
-                print(f"\nAuto-detected {direction.upper()} end at: {pos}")
+                print(f"\nAuto-detected {dir_label} end at: {pos}")
                 return pos
 
             print(f"\rPos={pos:<4}", end="", flush=True)
@@ -308,6 +309,18 @@ def main() -> int:
         help="manual: you set zero with keys; current: use immediate readback as zero",
     )
     p.add_argument(
+        "--left-raw-dir",
+        choices=("inc", "dec"),
+        default="dec",
+        help="Raw count direction to use when finding max_left (default: dec)",
+    )
+    p.add_argument(
+        "--right-raw-dir",
+        choices=("inc", "dec"),
+        default="inc",
+        help="Raw count direction to use when finding max_right (default: inc)",
+    )
+    p.add_argument(
         "--refine-after-auto",
         action="store_true",
         default=True,
@@ -379,7 +392,7 @@ def main() -> int:
                 zero_pos,
                 args.move_time,
                 args.speed,
-                "left",
+                args.left_raw_dir,
                 args.sweep_step,
                 args.stall_delta,
                 args.stall_cycles,
@@ -419,7 +432,7 @@ def main() -> int:
                 zero_pos,
                 args.move_time,
                 args.speed,
-                "right",
+                args.right_raw_dir,
                 args.sweep_step,
                 args.stall_delta,
                 args.stall_cycles,
