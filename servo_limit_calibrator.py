@@ -100,25 +100,27 @@ def poll_key(timeout_s: float = 0.0) -> Optional[str]:
     return None
 
 
-def jog_until_save(
+def jog_until_mark(
     bus: STSSerial,
     sid: int,
     start_pos: int,
     move_time_ms: int,
     speed: int,
+    mark_key: str,
+    mark_label: str,
 ) -> int:
     pos = start_pos
     step = 20
 
-    print("Controls: LEFT/RIGHT to move, '+'/'-' step, 's' save, 'q' quit")
+    print(f"Controls: LEFT/RIGHT to move, '+'/'-' step, '{mark_key}' mark {mark_label}, 'q' quit")
     print(f"Start pos={pos}, step={step}")
 
     while True:
         key = getch()
         if key in ("q", "Q"):
             raise KeyboardInterrupt("Calibration cancelled by user.")
-        if key in ("s", "S"):
-            print(f"\nSaved position: {pos}")
+        if key in (mark_key.lower(), mark_key.upper()):
+            print(f"\nMarked {mark_label}: {pos}")
             return pos
         if key in ("+", "="):
             step = min(512, step * 2)
@@ -152,6 +154,8 @@ def autosweep_until_save(
     speed: int,
     direction: str,
     step: int,
+    stall_delta: int,
+    stall_cycles: int,
 ) -> int:
     if direction not in ("left", "right"):
         raise ValueError("direction must be 'left' or 'right'")
@@ -159,6 +163,7 @@ def autosweep_until_save(
     pos = start_pos
     delta = -abs(step) if direction == "left" else abs(step)
     print(f"Auto-sweeping {direction.upper()}... press 's' to save end, 'q' to quit")
+    stuck_count = 0
 
     with raw_stdin():
         while True:
@@ -173,7 +178,18 @@ def autosweep_until_save(
             next_pos = max(0, min(4095, pos + delta))
             move_test(bus, sid, next_pos, move_time_ms, speed)
             time.sleep(max(0.03, move_time_ms / 1000.0 * 0.45))
+            prev_pos = pos
             pos = read_position(bus, sid, next_pos)
+
+            if abs(pos - prev_pos) <= stall_delta:
+                stuck_count += 1
+            else:
+                stuck_count = 0
+
+            if stuck_count >= stall_cycles:
+                print(f"\nAuto-detected {direction.upper()} end at: {pos}")
+                return pos
+
             print(f"\rPos={pos:<4}", end="", flush=True)
 
 
@@ -253,6 +269,24 @@ def main() -> int:
         default=18,
         help="Step size per auto-sweep update (raw position units)",
     )
+    p.add_argument(
+        "--stall-delta",
+        type=int,
+        default=2,
+        help="Position delta considered 'not moving' for end-stop detection",
+    )
+    p.add_argument(
+        "--stall-cycles",
+        type=int,
+        default=6,
+        help="Consecutive stalled updates to auto-detect sweep end",
+    )
+    p.add_argument(
+        "--zero-mode",
+        choices=("manual", "current"),
+        default="manual",
+        help="manual: you set zero with keys; current: use immediate readback as zero",
+    )
     p.add_argument("--return-time", type=int, default=700, help="Return-to-zero time (ms)")
     p.add_argument(
         "--auto-test",
@@ -286,17 +320,48 @@ def main() -> int:
 
         zero_pos = read_position(bus, args.servo_id, 2048)
         print(f"Connected to {args.servo_name} (ID {args.servo_id})")
-        print(f"Captured zero/start position: {zero_pos}")
+        print(f"Current position: {zero_pos}")
+
+        if args.zero_mode == "manual":
+            print("\nSet ZERO position now, then press 'z' to mark.")
+            zero_pos = jog_until_mark(
+                bus=bus,
+                sid=args.servo_id,
+                start_pos=zero_pos,
+                move_time_ms=args.move_time,
+                speed=args.speed,
+                mark_key="z",
+                mark_label="zero",
+            )
+        else:
+            print(f"Using current position as zero: {zero_pos}")
+
         print("Press ENTER to start LEFT limit calibration...")
         input()
 
         print("\nMove to MAX LEFT and press 's' to save.")
         if args.mode == "auto":
             max_left = autosweep_until_save(
-                bus, args.servo_id, zero_pos, args.move_time, args.speed, "left", args.sweep_step
+                bus,
+                args.servo_id,
+                zero_pos,
+                args.move_time,
+                args.speed,
+                "left",
+                args.sweep_step,
+                args.stall_delta,
+                args.stall_cycles,
             )
         else:
-            max_left = jog_until_save(bus, args.servo_id, zero_pos, args.move_time, args.speed)
+            max_left = jog_until_mark(
+                bus=bus,
+                sid=args.servo_id,
+                start_pos=zero_pos,
+                move_time_ms=args.move_time,
+                speed=args.speed,
+                mark_key="s",
+                mark_label="max_left",
+            )
 
         print(f"Returning to zero/start ({zero_pos})...")
         move_test(bus, args.servo_id, zero_pos, args.return_time, args.speed)
@@ -308,10 +373,26 @@ def main() -> int:
         print("Move to MAX RIGHT and press 's' to save.")
         if args.mode == "auto":
             max_right = autosweep_until_save(
-                bus, args.servo_id, zero_pos, args.move_time, args.speed, "right", args.sweep_step
+                bus,
+                args.servo_id,
+                zero_pos,
+                args.move_time,
+                args.speed,
+                "right",
+                args.sweep_step,
+                args.stall_delta,
+                args.stall_cycles,
             )
         else:
-            max_right = jog_until_save(bus, args.servo_id, zero_pos, args.move_time, args.speed)
+            max_right = jog_until_mark(
+                bus=bus,
+                sid=args.servo_id,
+                start_pos=zero_pos,
+                move_time_ms=args.move_time,
+                speed=args.speed,
+                mark_key="s",
+                mark_label="max_right",
+            )
 
         print(f"\nReturning to zero/start ({zero_pos})...")
         move_test(bus, args.servo_id, zero_pos, args.return_time, args.speed)
