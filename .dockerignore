@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+STServo_Python.zip
+STServo_Python/stservo-env
+STServo_Python/.venv
+
+*.log
+*.tmp
+*.swp
